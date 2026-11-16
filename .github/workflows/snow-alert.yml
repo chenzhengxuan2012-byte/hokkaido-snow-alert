@@ -10,6 +10,10 @@ name: 北海道降雪提醒
         description: "强制推送一条测试通知（验证 Bark 是否通了）"
         type: boolean
         default: false
+      simulate:
+        description: "模拟某个城市刚开始下雪（填城市名，如 函館）"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -35,4 +39,5 @@ jobs:
         env:
           BARK_KEY: ${{ secrets.BARK_KEY }}
           FORCE_PUSH: ${{ github.event.inputs.force == 'true' && '1' || '0' }}
+          SIMULATE_CITY: ${{ github.event.inputs.simulate }}
         run: python snow_alert.py
