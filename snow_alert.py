@@ -48,6 +48,7 @@ BARK_KEY = os.getenv("BARK_KEY", "").strip()
 BARK_SERVER = os.getenv("BARK_SERVER", "https://api.day.app").rstrip("/")
 FORCE_PUSH = os.getenv("FORCE_PUSH", "0").strip() == "1"
 SIMULATE_CITY = os.getenv("SIMULATE_CITY", "").strip()   # 填城市名可模拟"刚开始下雪"
+FORCE_FALLBACK = os.getenv("FORCE_FALLBACK", "0").strip() == "1"   # =1 时跳过主源，直接用备用源
 
 
 # ---------------------------------------------------------------- 工具函数
@@ -268,6 +269,16 @@ def run():
     pushed = False
     for city in CITIES:
         print(f"— {city['name']} —")
+        if FORCE_FALLBACK:
+            print("  [强制备用源模式]")
+            try:
+                text = http_text(
+                    f"https://wttr.in/{city['en']}?format=%C+%t+%p&m&lang=zh-cn"
+                )
+                pushed |= report_fallback(city, text)
+            except Exception as exc:
+                print(f"  备用源失败：{exc!r}")
+            continue
         try:
             pushed |= report(city, fetch_primary(city))
         except Exception as exc:
