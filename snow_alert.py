@@ -106,7 +106,7 @@ def bark(title, body, group):
         "body": body,
         "group": group,
         "level": "timeSensitive",
-        "icon": "https://cdn.jsdelivr.net/gh/Finb/bark@master/docs/icon.png",
+        "icon": "https://raw.githubusercontent.com/chenzhengxuan2012-byte/hokkaido-snow-alert/main/assets/snowflake.png",
     }
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
