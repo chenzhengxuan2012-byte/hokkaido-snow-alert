@@ -47,6 +47,7 @@ CITIES = [
 BARK_KEY = os.getenv("BARK_KEY", "").strip()
 BARK_SERVER = os.getenv("BARK_SERVER", "https://api.day.app").rstrip("/")
 FORCE_PUSH = os.getenv("FORCE_PUSH", "0").strip() == "1"
+SIMULATE_CITY = os.getenv("SIMULATE_CITY", "").strip()   # 填城市名可模拟"刚开始下雪"
 
 
 # ---------------------------------------------------------------- 工具函数
@@ -140,7 +141,7 @@ def fetch_primary(city):
 
 
 # ---------------------------------------------------------------- 判断与推送
-def report(city, data):
+def report(city, data, simulated=False):
     cur = data["current"]
     hs = data["hourly"]["snowfall"]
     hours = data["hourly"]["time"]
@@ -168,6 +169,9 @@ def report(city, data):
         "未来3小时 " + " / ".join(f"{x:.2f}" for x in nxt) + " cm\n"
         f"风 {wind:.0f} km/h｜湿度 {rh:.0f}%"
     )
+    if simulated:
+        detail = "【模拟测试数据·非真实天气】\n" + detail
+    tag = "（模拟）" if simulated else ""
     group = f"{city['name']}降雪"
 
     print(
@@ -176,27 +180,27 @@ def report(city, data):
     )
 
     if FORCE_PUSH:
-        bark(f"🧪 {city['name']}降雪·测试推送", "通道正常。\n" + detail, group)
+        bark(f"🧪 {city['name']}降雪·测试推送{tag}", "通道正常。\n" + detail, group)
         return True
 
     if prev_cm <= 0 < now_cm:
-        bark(f"❄️ {city['name']}开始下雪了", detail, group)
+        bark(f"❄️ {city['name']}开始下雪了{tag}", detail, group)
         return True
 
     if prev_cm > 0 >= now_cm:
-        bark(f"🌤 {city['name']}雪停了", detail, group)
+        bark(f"🌤 {city['name']}雪停了{tag}", detail, group)
         return True
 
     if now_cm <= 0 < nxt[0] and 20 <= local.minute < 40:
         bark(
-            f"🌨 {city['name']} {next_hour} 前后要下雪",
-            f"未来一小时预计 {nxt[0]:.2f} cm\n" + detail,
+            f"🌨 {city['name']} {next_hour} 前后要下雪{tag}",
+            detail,
             group,
         )
         return True
 
     if now_cm > 0 and local.hour in (9, 21) and local.minute < 30:
-        bark(f"❄️ {city['name']}降雪中·简报", detail, group)
+        bark(f"❄️ {city['name']}降雪中·简报{tag}", detail, group)
         return True
 
     return False
@@ -216,8 +220,47 @@ def report_fallback(city, text):
     return False
 
 
+# ---------------------------------------------------------------- 模拟
+def simulate(city_name):
+    """造一份"刚开始下雪"的假数据，走完整的判断 + 推送链路。"""
+    city = None
+    for c in CITIES:
+        if city_name in c["name"] or city_name.lower() in c["en"].lower():
+            city = c
+            break
+    if city is None:
+        print(f"没找到城市「{city_name}」，可选：{[c['name'] for c in CITIES]}")
+        return
+
+    now = datetime.now(LOCAL_TZ).replace(minute=0, second=0, microsecond=0)
+    times = [(now + timedelta(hours=off)).strftime("%Y-%m-%dT%H:%M") for off in (-1, 0, 1, 2, 3, 4)]
+    data = {
+        "current": {
+            "temperature_2m": -1.8, "apparent_temperature": -6.4,
+            "snowfall": 0.80, "snow_depth": 0.08, "weather_code": 71,
+            "wind_speed_10m": 22.0, "relative_humidity_2m": 88,
+        },
+        "hourly": {
+            "time": times,
+            "snowfall": [0.00, 0.80, 0.90, 1.20, 0.60, 0.30],   # 上一小时 0 -> 本小时 0.8 = 刚开始下
+            "temperature_2m": [-1.5, -1.8, -2.0, -2.2, -1.9, -1.6],
+        },
+        "daily": {
+            "time": [now.strftime("%Y-%m-%d")],
+            "snowfall_sum": [2.4],
+            "temperature_2m_max": [0.2],
+            "temperature_2m_min": [-2.6],
+        },
+    }
+    print(f"模拟：{city['name']} 刚开始下雪（0.80 cm/h）")
+    report(city, data, simulated=True)
+
+
 # ---------------------------------------------------------------- 主流程
 def run():
+    if SIMULATE_CITY:
+        simulate(SIMULATE_CITY)
+        return
     pushed = False
     for city in CITIES:
         print(f"— {city['name']} —")
