@@ -70,7 +70,7 @@ def snow_level(cm_per_hour):
     return "大雪"
 
 
-def http_json(url, retries=3, timeout=25):
+def http_json(url, retries=5, timeout=25):
     last = None
     for i in range(1, retries + 1):
         try:
@@ -83,7 +83,7 @@ def http_json(url, retries=3, timeout=25):
             last = exc
             print(f"  第 {i} 次请求失败：{exc!r}")
             if i < retries:
-                time.sleep(3 * i)
+                time.sleep(min(5 * i, 30))
     raise last
 
 
@@ -95,7 +95,7 @@ def http_text(url, timeout=20):
         return r.read().decode("utf-8").strip()
 
 
-def bark(title, body, group):
+def bark(title, body, group, level="timeSensitive"):
     if not BARK_KEY:
         print("  [未配置 BARK_KEY] 本应推送 ->", title)
         return
@@ -105,7 +105,7 @@ def bark(title, body, group):
         "title": title,
         "body": body,
         "group": group,
-        "level": "timeSensitive",
+        "level": level,
         "icon": "https://raw.githubusercontent.com/chenzhengxuan2012-byte/hokkaido-snow-alert/main/assets/snowflake.png",
     }
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -207,14 +207,18 @@ def report(city, data, simulated=False):
 
 
 def report_fallback(city, text):
-    """Open-Meteo 挂掉时的降级：只看 wttr.in 的一行文字。"""
+    """Open-Meteo 挂掉时的降级：只看 wttr.in 的一行文字（强制公制）。"""
     group = f"{city['name']}降雪"
     print(f"  {city['name']} 降级数据：{text}")
     if FORCE_PUSH or ("雪" in text and "无雪" not in text):
         bark(
-            f"❄️ {city['name']}（备用数据源）",
-            f"当前：{text}\n主数据源暂时不可用，本条来自备用接口。",
+            f"⚠️ {city['name']} · 主数据源异常",
+            f"备用接口读数：{text}\n"
+            "Open-Meteo 暂时连不上，本条只是系统提示，不代表真的在下雪——\n"
+            "备用源用的是另一套模式数据，明显偏低可能误报（实测同刻主源 2.4°C、备用源报 -1°C）。\n"
+            "下一次定时检查会自动重试主源。",
             group,
+            level="passive",      # 安静通知：只进通知中心，不亮屏、不出声
         )
         return True
     return False
@@ -270,7 +274,7 @@ def run():
             print(f"  主数据源失败：{exc!r}，切备用源")
             try:
                 text = http_text(
-                    f"https://wttr.in/{city['en']}?format=%C+%t+%p&lang=zh-cn"
+                    f"https://wttr.in/{city['en']}?format=%C+%t+%p&m&lang=zh-cn"
                 )
                 pushed |= report_fallback(city, text)
             except Exception as exc2:
