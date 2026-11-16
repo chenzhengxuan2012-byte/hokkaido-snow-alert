@@ -1,0 +1,37 @@
+name: 北海道降雪提醒
+
+"on":
+  schedule:
+    # GitHub cron 用 UTC；"每 30 分钟"本身与时区无关，脚本内部按东京时间判断。
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "强制推送一条测试通知（验证 Bark 是否通了）"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: snow-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 取仓库代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 检查小樽 / 函館 是否开始下雪
+        env:
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          FORCE_PUSH: ${{ github.event.inputs.force == 'true' && '1' || '0' }}
+        run: python snow_alert.py
